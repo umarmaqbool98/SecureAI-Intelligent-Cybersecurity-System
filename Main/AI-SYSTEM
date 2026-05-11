@@ -1,0 +1,293 @@
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, classification_report
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.pipeline import Pipeline
+import numpy as np
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Embedding, LSTM, Dense, Dropout
+from tensorflow.keras.preprocessing.text import Tokenizer
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+from sklearn.metrics import confusion_matrix
+
+# --- Malware Detection --- 
+# Simulate Data
+data = {
+    'feature_1': [0.1, 0.5, 0.2, 0.8, 0.3, 0.6, 0.9, 0.4, 0.7, 0.2],
+    'feature_2': [10, 20, 12, 30, 15, 25, 35, 18, 28, 11],
+    'feature_3': [0, 1, 0, 1, 0, 1, 1, 0, 1, 0],
+    'label': [0, 1, 0, 1, 0, 1, 1, 0, 1, 0] # 0 for benign, 1 for malware
+}
+df_malware = pd.DataFrame(data)
+
+X_malware = df_malware[['feature_1', 'feature_2', 'feature_3']]
+y_malware = df_malware['label']
+
+X_train_malware, X_test_malware, y_train_malware, y_test_malware = train_test_split(X_malware, y_malware, test_size=0.3, random_state=42)
+
+# Initialize and train a Random Forest Classifier
+rf_model = RandomForestClassifier(n_estimators=100, random_state=42)
+rf_model.fit(X_train_malware, y_train_malware)
+
+# Make predictions
+y_pred_malware = rf_model.predict(X_test_malware)
+
+# Evaluate the model
+print("Malware Detection Model Performance:")
+print(f"Accuracy: {accuracy_score(y_test_malware, y_pred_malware):.2f}")
+print("Classification Report:")
+print(classification_report(y_test_malware, y_pred_malware, zero_division=1))
+
+# Malware Detection Metrics Visualization
+report_dict_malware = classification_report(y_test_malware, y_pred_malware, output_dict=True, zero_division=1)
+
+df_report_malware = pd.DataFrame(report_dict_malware).transpose()
+if '0' in df_report_malware.index and '1' in df_report_malware.index:
+    df_report_malware = df_report_malware.loc[['0', '1']]
+elif '0' in df_report_malware.index:
+    df_report_malware = df_report_malware.loc[['0']]
+elif '1' in df_report_malware.index:
+    df_report_malware = df_report_malware.loc[['1']]
+else:
+    print("No classes '0' or '1' found in the classification report for plotting.")
+    df_report_malware = pd.DataFrame()
+
+if not df_report_malware.empty:
+    df_report_malware = df_report_malware.drop(columns=['support'], errors='ignore')
+
+    fig, ax = plt.subplots(figsize=(10, 7))
+    df_report_malware[['precision', 'recall', 'f1-score']].plot(kind='bar', ax=ax)
+    plt.title('Malware Detection Model: Precision, Recall, F1-Score per Class', fontsize=14)
+    plt.xlabel('Class (0: Benign, 1: Malware)', fontsize=12)
+    plt.ylabel('Score', fontsize=12)
+    plt.ylim(0, 1.1)
+    plt.xticks(rotation=0, fontsize=10)
+    plt.yticks(fontsize=10)
+    plt.legend(loc='lower right', fontsize=10)
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+    plt.tight_layout()
+    plt.show()
+print("Malware Detection Metrics Visualization complete. Note: Due to the very small, simulated dataset, some metrics might appear unusual, especially for classes with minimal or no samples in the test set. For robust evaluation, larger and more balanced datasets are required.")
+
+# --- Phishing URL Detection ---
+data_url = {
+    'url': [
+        'https://www.google.com/search?q=python',
+        'http://phishing.example.com/login.html',
+        'https://www.amazon.com/gp/bestsellers/',
+        'http://bank.secure-login.net/update.php?id=123',
+        'https://colab.research.google.com/',
+        'http://paypal.login-security.co/confirm.php'
+    ],
+    'is_phishing': [0, 1, 0, 1, 0, 1]
+}
+df_phishing = pd.DataFrame(data_url)
+
+def extract_url_features(url):
+    features = {
+        'url_length': len(url),
+        'has_ip_address': 1 if any(char.isdigit() for char in url.split('//')[1].split('/')[0].replace('.', '')) else 0,
+        'has_at_symbol': 1 if '@' in url else 0
+    }
+    return pd.Series(features)
+
+url_features = df_phishing['url'].apply(extract_url_features)
+df_phishing = pd.concat([df_phishing, url_features], axis=1)
+
+X_phishing = df_phishing[['url_length', 'has_ip_address', 'has_at_symbol']]
+y_phishing = df_phishing['is_phishing']
+
+X_train_phishing, X_test_phishing, y_train_phishing, y_test_phishing = train_test_split(X_phishing, y_phishing, test_size=0.3, random_state=42)
+
+dt_model = DecisionTreeClassifier(random_state=42)
+dt_model.fit(X_train_phishing, y_train_phishing)
+
+y_pred_phishing = dt_model.predict(X_test_phishing)
+
+print("\nPhishing URL Detection Model Performance:")
+print(f"Accuracy: {accuracy_score(y_test_phishing, y_pred_phishing):.2f}")
+print("Classification Report:")
+print(classification_report(y_test_phishing, y_pred_phishing, zero_division=1))
+
+# Phishing URL Detection Metrics Visualization
+report_dict_phishing = classification_report(y_test_phishing, y_pred_phishing, output_dict=True, zero_division=1)
+
+df_report_phishing = pd.DataFrame(report_dict_phishing).transpose()
+if '0' in df_report_phishing.index and '1' in df_report_phishing.index:
+    df_report_phishing = df_report_phishing.loc[['0', '1']]
+elif '0' in df_report_phishing.index:
+    df_report_phishing = df_report_phishing.loc[['0']]
+elif '1' in df_report_phishing.index:
+    df_report_phishing = df_report_phishing.loc[['1']]
+else:
+    print("No classes '0' or '1' found in the classification report for plotting.")
+    df_report_phishing = pd.DataFrame()
+
+if not df_report_phishing.empty:
+    df_report_phishing = df_report_phishing.drop(columns=['support'], errors='ignore')
+
+    fig, ax = plt.subplots(figsize=(10, 7))
+    df_report_phishing[['precision', 'recall', 'f1-score']].plot(kind='bar', ax=ax)
+    plt.title('Phishing URL Detection Model: Precision, Recall, F1-Score per Class', fontsize=14)
+    plt.xlabel('Class (0: Legitimate, 1: Phishing)', fontsize=12)
+    plt.ylabel('Score', fontsize=12)
+    plt.ylim(0, 1.1)
+    plt.xticks(rotation=0, fontsize=10)
+    plt.yticks(fontsize=10)
+    plt.legend(loc='lower right', fontsize=10)
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+    plt.tight_layout()
+    plt.show()
+print("Phishing URL Detection Metrics Visualization complete. Note: Due to the very small, simulated dataset, some metrics might appear unusual, especially for classes with minimal or no samples in the test set. For robust evaluation, larger and more balanced datasets are required.")
+
+# --- Password Strength Prediction ---
+passwords = [
+    "password123", "StrongP@ssw0rd!", "abcde", "MySecureP4ss",
+    "123456", "G00d_p4ss", "short", "VeryLongAndComplexP@ssw0rd",
+    "admin", "P@ssword1"
+]
+
+strength_scores = np.array([
+    0.2, 0.9, 0.1, 0.7,
+    0.05, 0.8, 0.08, 0.95,
+    0.01, 0.6
+])
+
+tokenizer = Tokenizer(char_level=True, lower=False)
+tokenizer.fit_on_texts(passwords)
+
+sequences = tokenizer.texts_to_sequences(passwords)
+
+max_len = max(len(seq) for seq in sequences)
+
+padded_sequences = pad_sequences(
+    sequences,
+    maxlen=max_len,
+    padding='post'
+)
+
+vocab_size = len(tokenizer.word_index) + 1
+
+X_train, X_test, y_train, y_test = train_test_split(
+    padded_sequences,
+    strength_scores,
+    test_size=0.3,
+    random_state=42
+)
+
+model = Sequential([
+    Embedding(input_dim=vocab_size, output_dim=50),
+    LSTM(100),
+    Dropout(0.5),
+    Dense(1, activation='sigmoid')
+])
+
+model.compile(
+    optimizer='adam',
+    loss='mse',
+    metrics=['mae']
+)
+
+print("Training Model...\n")
+
+history = model.fit(
+    X_train,
+    y_train,
+    epochs=20,
+    batch_size=2,
+    validation_split=0.2,
+    verbose=1
+)
+
+print("\nTesting Model...\n")
+
+loss, mae = model.evaluate(X_test, y_test, verbose=1)
+
+print(f"\nTest Loss (MSE): {loss:.4f}")
+print(f"Test MAE: {mae:.4f}")
+
+sample_password = "MyS3cr3t!"
+
+sample_sequence = tokenizer.texts_to_sequences([sample_password])
+
+sample_padded = pad_sequences(
+    sample_sequence,
+    maxlen=max_len,
+    padding='post'
+)
+
+predicted_strength = model.predict(sample_padded)[0][0]
+
+print(f"\nPassword: {sample_password}")
+print(f"Predicted Strength: {predicted_strength:.2f}")
+
+if predicted_strength < 0.3:
+    print("Strength Level: Very Weak")
+elif predicted_strength < 0.6:
+    print("Strength Level: Moderate")
+elif predicted_strength < 0.8:
+    print("Strength Level: Strong")
+else:
+    print("Strength Level: Very Strong")
+
+# Password Strength Prediction Model Visualizations
+plt.figure(figsize=(12, 5))
+
+plt.subplot(1, 2, 1)
+plt.plot(history.history['loss'])
+plt.plot(history.history['val_loss'])
+plt.title('Model Loss')
+plt.ylabel('Loss (MSE)')
+plt.xlabel('Epoch')
+plt.legend(['Train', 'Validation'], loc='upper right')
+
+plt.subplot(1, 2, 2)
+plt.plot(history.history['mae'])
+plt.plot(history.history['val_mae'])
+plt.title('Model Mean Absolute Error')
+plt.ylabel('MAE')
+plt.xlabel('Epoch')
+plt.legend(['Train', 'Validation'], loc='upper right')
+
+plt.tight_layout()
+plt.show()
+
+y_pred_test = model.predict(X_test).flatten()
+
+plt.figure(figsize=(8, 6))
+plt.scatter(y_test, y_pred_test, alpha=0.7)
+plt.plot([0, 1], [0, 1], 'r--')
+plt.xlabel('Actual Strength Score')
+plt.ylabel('Predicted Strength Score')
+plt.title('Actual vs. Predicted Password Strength Scores')
+plt.grid(True)
+plt.show()
+
+def categorize_strength(score):
+    if score < 0.3:
+        return 'Very Weak'
+    elif score < 0.6:
+        return 'Moderate'
+    elif score < 0.8:
+        return 'Strong'
+    else:
+        return 'Very Strong'
+
+true_categories = [categorize_strength(s) for s in y_test]
+predicted_categories = [categorize_strength(s) for s in y_pred_test]
+
+categories_order = ['Very Weak', 'Moderate', 'Strong', 'Very Strong']
+
+cm = confusion_matrix(true_categories, predicted_categories, labels=categories_order)
+
+plt.figure(figsize=(8, 6))
+sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=categories_order, yticklabels=categories_order)
+plt.xlabel('Predicted Category')
+plt.ylabel('True Category')
+plt.title('Confusion Matrix for Password Strength Categories')
+plt.show()
